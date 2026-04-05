@@ -36,6 +36,7 @@ prompt_toolkit==3.0.52
 propcache==0.4.1
 psycopg2-binary==2.9.9
 pydantic==2.7.4
+pydantic-settings==2.3.4
 pydantic_core==2.18.4
 pyee==11.1.0
 python-dateutil==2.9.0.post0
