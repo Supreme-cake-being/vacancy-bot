@@ -1,0 +1,18 @@
+# Environment
+.venv/
+.env
+.env.*.local
+
+# БД і логи
+*.db
+*.sqlite3
+logs/
+
+# Playwright
+playwright/.local-browsers/
+
+# VS Code
+.vscode/
+
+# Docker volumes
+postgres_dev_data/.env
