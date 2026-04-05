@@ -7,13 +7,13 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.redis import RedisStorage
 from redis.asyncio import Redis
 
-from app.bot.handlers import start, sites, keywords
+from app.bot.handlers import keywords, sites, start
 from app.bot.middlewares import DbSessionMiddleware, LoggingMiddleware
 from app.config import settings
 from app.db.session import close_db
+from app.scheduler.jobs import setup_scheduler, scheduler
 
 logger = logging.getLogger(__name__)
-
 
 async def main() -> None:
     logging.basicConfig(
@@ -40,13 +40,17 @@ async def main() -> None:
     dp.include_router(sites.router)
     dp.include_router(keywords.router)
 
+    # Start scheduler
+    setup_scheduler()
+
     logger.info("Bot is starting...")
 
     try:
-        # Видаляємо вебхук якщо був встановлений
+        # Delete webhook if it exists
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
     finally:
+        scheduler.shutdown(wait=False)
         await close_db()
         await bot.session.close()
         await redis.aclose()

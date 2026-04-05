@@ -104,6 +104,21 @@ class SiteRepo:
                 checked_at=datetime.now(timezone.utc),
             )
         )
+    
+    @staticmethod
+    async def get_by_id(db: AsyncSession, site_id: int) -> Site | None:
+        return await db.get(Site, site_id)
+
+    @staticmethod
+    async def update_selector(
+        db: AsyncSession, site_id: int, selector: str
+    ) -> None:
+        """Save auto-detected CSS selector for future runs."""
+        await db.execute(
+            update(Site)
+            .where(Site.id == site_id)
+            .values(css_selector=selector)
+        )
 
 class SubscriptionRepo:
 
