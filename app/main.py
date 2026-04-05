@@ -7,7 +7,7 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.redis import RedisStorage
 from redis.asyncio import Redis
 
-from app.bot.handlers import start, sites
+from app.bot.handlers import start, sites, keywords
 from app.bot.middlewares import DbSessionMiddleware, LoggingMiddleware
 from app.config import settings
 from app.db.session import close_db
@@ -38,6 +38,7 @@ async def main() -> None:
     # Routers
     dp.include_router(start.router)
     dp.include_router(sites.router)
+    dp.include_router(keywords.router)
 
     logger.info("Bot is starting...")
 

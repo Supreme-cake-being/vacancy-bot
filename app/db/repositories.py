@@ -24,7 +24,6 @@ class UserRepo:
         username: str | None = None,
         first_name: str | None = None,
     ) -> tuple[User, bool]:
-        """Returns (user, created)"""
         user = await UserRepo.get_by_telegram_id(db, telegram_id)
         if user:
             return user, False
@@ -34,8 +33,19 @@ class UserRepo:
             first_name=first_name,
         )
         db.add(user)
-        await db.flush()   # get id without commit
+        await db.flush()
         return user, True
+
+    @staticmethod
+    async def set_keywords(
+        db: AsyncSession, telegram_id: int, keywords: str | None
+    ) -> None:
+        """Зберігає ключові слова для користувача."""
+        await db.execute(
+            update(User)
+            .where(User.telegram_id == telegram_id)
+            .values(keywords=keywords)
+        )
 
 class SiteRepo:
 
@@ -140,13 +150,8 @@ class SubscriptionRepo:
         db: AsyncSession,
         user_id: int,
         site_id: int,
-        keywords: str | None = None,
     ) -> Subscription:
-        sub = Subscription(
-            user_id=user_id,
-            site_id=site_id,
-            keywords=keywords,
-        )
+        sub = Subscription(user_id=user_id, site_id=site_id)
         db.add(sub)
         await db.flush()
         return sub

@@ -15,6 +15,7 @@ class User(Base):
     telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
     username: Mapped[str | None] = mapped_column(String(64))
     first_name: Mapped[str | None] = mapped_column(String(128))
+    keywords: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -27,8 +28,10 @@ class User(Base):
         back_populates="user", cascade="all, delete-orphan"
     )
 
-    def __repr__(self) -> str:
-        return f"<User id={self.id} telegram_id={self.telegram_id}>"
+    def keywords_list(self) -> list[str]:
+        if not self.keywords:
+            return []
+        return [k.strip() for k in self.keywords.split(",") if k.strip()]
 
 class Site(Base):
     __tablename__ = "sites"
@@ -60,15 +63,13 @@ class Site(Base):
 class Subscription(Base):
     __tablename__ = "subscriptions"
     __table_args__ = (
-        # One user can't subscribe to the same site twice
         UniqueConstraint("user_id", "site_id", name="uq_user_site"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"))
-    # Ключові слова через кому: "Python,Django,Remote"
-    keywords: Mapped[str | None] = mapped_column(Text)
+    # keywords тут більше немає
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -76,15 +77,6 @@ class Subscription(Base):
 
     user: Mapped["User"] = relationship(back_populates="subscriptions")
     site: Mapped["Site"] = relationship(back_populates="subscriptions")
-
-    def keywords_list(self) -> list[str]:
-        """Returns keywords as a list."""
-        if not self.keywords:
-            return []
-        return [k.strip() for k in self.keywords.split(",") if k.strip()]
-
-    def __repr__(self) -> str:
-        return f"<Subscription user={self.user_id} site={self.site_id}>"
 
 class Vacancy(Base):
     __tablename__ = "vacancies"

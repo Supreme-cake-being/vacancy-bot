@@ -5,10 +5,11 @@ from app.db.models import Subscription, Site
 
 def main_menu_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    builder.button(text="Додати сайт", callback_data="add_site")
-    builder.button(text="Мої підписки", callback_data="my_sites")
-    builder.button(text="Довідка", callback_data="help")
-    builder.adjust(2, 1)  # 2 buttons in the first row, 1 in the second row
+    builder.button(text="Add Site", callback_data="add_site")
+    builder.button(text="My Subscriptions", callback_data="my_sites")
+    builder.button(text="Edit Keywords", callback_data="edit_keywords")
+    builder.button(text="Help", callback_data="help")
+    builder.adjust(2, 2) 
     return builder.as_markup()
 
 def subscriptions_kb(
@@ -23,8 +24,8 @@ def subscriptions_kb(
             text=f"{site_name}{status}",
             callback_data=f"site_menu:{sub.site_id}",
         )
-    builder.button(text="Додати сайт", callback_data="add_site")
-    builder.button(text="Назад", callback_data="back_to_start")
+    builder.button(text="Add Site", callback_data="add_site")
+    builder.button(text="Back", callback_data="back_to_start")
     builder.adjust(1)
     return builder.as_markup()
 

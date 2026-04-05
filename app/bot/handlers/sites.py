@@ -12,7 +12,6 @@ from app.bot.keyboards import (
     cancel_kb,
     confirm_remove_kb,
     site_actions_kb,
-    skip_kb,
     subscriptions_kb,
 )
 from app.db.repositories import SiteRepo, SubscriptionRepo, UserRepo
@@ -30,29 +29,25 @@ URL_REGEX = re.compile(
 
 class AddSiteStates(StatesGroup):
     waiting_url = State()
-    waiting_keywords = State()
-
-class EditKeywordsStates(StatesGroup):
-    waiting_keywords = State()
 
 # Add Site Flow
 
 @router.message(Command("add_site"))
 @router.callback_query(lambda c: c.data == "add_site")
-async def cmd_add_site(event: Message | CallbackQuery, state: FSMContext) -> None:
+async def cmd_add_site(
+    event: Message | CallbackQuery, state: FSMContext
+) -> None:
     text = (
-        "Send URL of a webpage with job openings.\n\n"
+        "Send URL of the site with job postings.\n\n"
         "<b>Examples:</b>\n"
         "https://company.com/careers\n"
         "https://jobs.company.com\n"
     )
-    kb = cancel_kb()
-
     if isinstance(event, CallbackQuery):
-        await event.message.edit_text(text, reply_markup=kb)
+        await event.message.edit_text(text, reply_markup=cancel_kb())
         await event.answer()
     else:
-        await event.answer(text, reply_markup=kb)
+        await event.answer(text, reply_markup=cancel_kb())
 
     await state.set_state(AddSiteStates.waiting_url)
 
@@ -62,7 +57,6 @@ async def process_url(
 ) -> None:
     url = message.text.strip().rstrip("/")
 
-    # Validation of URL
     if not URL_REGEX.match(url):
         await message.answer(
             "Invalid URL. Must start with <code>https://</code>\n"
@@ -71,85 +65,41 @@ async def process_url(
         )
         return
 
-    # Check if already subscribed
     user = await UserRepo.get_by_telegram_id(db, message.from_user.id)
     site, _ = await SiteRepo.get_or_create(db, url=url)
 
     if await SubscriptionRepo.exists(db, user_id=user.id, site_id=site.id):
         await message.answer(
             "You are already subscribed to this site.\n"
-            "View subscriptions: /my_sites"
+            "View your subscriptions: /my_sites"
         )
         await state.clear()
         return
 
-    await state.update_data(url=url, site_id=site.id)
-    await state.set_state(AddSiteStates.waiting_keywords)
-
-    await message.answer(
-        "Add keywords for filtering job postings?\n\n"
-        "Enter them separated by commas:\n"
-        "<code>Python, Remote, Senior</code>\n\n"
-        "Or press <b>Skip</b> to receive all job postings.",
-        reply_markup=skip_kb(),
-    )
-
-@router.message(AddSiteStates.waiting_keywords, F.text)
-async def process_keywords(
-    message: Message, state: FSMContext, db: AsyncSession
-) -> None:
-    data = await state.get_data()
-    keywords = message.text.strip()
-
-    await _finalize_subscription(message, state, db, data, keywords)
-
-@router.callback_query(
-    AddSiteStates.waiting_keywords, lambda c: c.data == "skip_keywords"
-)
-async def skip_keywords(
-    cb: CallbackQuery, state: FSMContext, db: AsyncSession
-) -> None:
-    data = await state.get_data()
-    await _finalize_subscription(cb.message, state, db, data, keywords=None)
-    await cb.answer()
-
-async def _finalize_subscription(
-    message: Message,
-    state: FSMContext,
-    db: AsyncSession,
-    data: dict,
-    keywords: str | None,
-) -> None:
-    user = await UserRepo.get_by_telegram_id(db, message.chat.id)
-    await SubscriptionRepo.create(
-        db,
-        user_id=user.id,
-        site_id=data["site_id"],
-        keywords=keywords,
-    )
+    await SubscriptionRepo.create(db, user_id=user.id, site_id=site.id)
     await state.clear()
 
-    kw_text = f"Keywords: <code>{keywords}</code>" if keywords else "All job postings"
+    kw_hint = ""
+    if not user.keywords:
+        kw_hint = (
+            "\n\nTip: set up keywords with the /keywords command — "
+            "and I'll filter job postings for you."
+        )
+
     await message.answer(
         f"Subscription added!\n\n"
-        f"Site: <code>{data['url']}</code>\n"
-        f"{kw_text}\n\n"
+        f"Site: <code>{url}</code>\n"
         f"First check will happen within an hour."
+        f"{kw_hint}"
     )
-    logger.info(
-        f"User {message.chat.id} subscribed to {data['url']} "
-        f"with keywords: {keywords}"
-    )
+    logger.info(f"User {message.from_user.id} subscribed to {url}")
 
 # Cancel FSM
 
 @router.callback_query(lambda c: c.data == "cancel_fsm")
 async def cancel_fsm(cb: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await cb.message.edit_text(
-        "Cancelled. What to do next?",
-        reply_markup=None,
-    )
+    await cb.message.edit_text("Cancelled.", reply_markup=None)
     await cb.answer()
 
 # View Subscriptions
@@ -159,11 +109,7 @@ async def cancel_fsm(cb: CallbackQuery, state: FSMContext) -> None:
 async def cmd_my_sites(
     event: Message | CallbackQuery, db: AsyncSession
 ) -> None:
-    tg_id = (
-        event.from_user.id
-        if isinstance(event, Message)
-        else event.from_user.id
-    )
+    tg_id = event.from_user.id
     user = await UserRepo.get_by_telegram_id(db, tg_id)
     subscriptions = await SubscriptionRepo.get_by_user(db, user.id)
 
@@ -201,12 +147,12 @@ async def cb_site_menu(cb: CallbackQuery, db: AsyncSession) -> None:
         await cb.answer("Subscription not found")
         return
 
+    status = "active" if sub.is_active else "on hold"
     kw_text = (
-        f"Keywords: <code>{sub.keywords}</code>"
-        if sub.keywords
+        f"Keywords: <code>{user.keywords}</code>"
+        if user.keywords
         else "Filter: all job postings"
     )
-    status = "active" if sub.is_active else "on hold"
 
     await cb.message.edit_text(
         f"<b>{sub.site.name or sub.site.url}</b>\n\n"
@@ -248,7 +194,7 @@ async def cb_resume_site(cb: CallbackQuery, db: AsyncSession) -> None:
         reply_markup=site_actions_kb(site_id, is_active=True)
     )
 
-# Remove subscription
+# Remove Subscription
 
 @router.callback_query(lambda c: c.data.startswith("remove_site:"))
 async def cb_remove_site(cb: CallbackQuery, db: AsyncSession) -> None:
@@ -259,6 +205,7 @@ async def cb_remove_site(cb: CallbackQuery, db: AsyncSession) -> None:
     )
     await cb.answer()
 
+
 @router.callback_query(lambda c: c.data.startswith("confirm_remove:"))
 async def cb_confirm_remove(cb: CallbackQuery, db: AsyncSession) -> None:
     site_id = int(cb.data.split(":")[1])
@@ -268,57 +215,27 @@ async def cb_confirm_remove(cb: CallbackQuery, db: AsyncSession) -> None:
     await cb.message.edit_text("Subscription removed.")
     logger.info(f"User {cb.from_user.id} removed subscription to site {site_id}")
 
-# Edit keywords
+#  Keywords
 
 @router.callback_query(lambda c: c.data.startswith("edit_keywords:"))
-async def cb_edit_keywords(cb: CallbackQuery, state: FSMContext) -> None:
-    site_id = int(cb.data.split(":")[1])
-    await state.set_state(EditKeywordsStates.waiting_keywords)
-    await state.update_data(site_id=site_id)
+async def cb_edit_keywords(cb: CallbackQuery, state: FSMContext, db: AsyncSession) -> None:
+    from app.bot.handlers.keywords import KeywordsStates
+    from app.bot.keyboards import skip_kb
+
+    user = await UserRepo.get_by_telegram_id(db, cb.from_user.id)
+
+    current = (
+        f"Current keywords:\n<code>{user.keywords}</code>\n\n"
+        if user.keywords
+        else "No keywords set yet.\n\n"
+    )
+
+    await state.set_state(KeywordsStates.waiting_keywords)
     await cb.message.edit_text(
+        f"{current}"
         "Enter new keywords separated by comma:\n"
         "<code>Python, Remote, Senior</code>\n\n"
-        "Or press <b>Skip</b> to remove the filter.",
+        "Or send <code>-</code> to remove the filter and receive all job postings.",
         reply_markup=skip_kb(),
     )
     await cb.answer()
-
-@router.message(EditKeywordsStates.waiting_keywords, F.text)
-async def process_edit_keywords(
-    message: Message, state: FSMContext, db: AsyncSession
-) -> None:
-    data = await state.get_data()
-    await _save_keywords(message, state, db, data, message.text.strip())
-
-@router.callback_query(
-    EditKeywordsStates.waiting_keywords, lambda c: c.data == "skip_keywords"
-)
-async def skip_edit_keywords(
-    cb: CallbackQuery, state: FSMContext, db: AsyncSession
-) -> None:
-    data = await state.get_data()
-    await _save_keywords(cb.message, state, db, data, keywords=None)
-    await cb.answer()
-
-async def _save_keywords(
-    message: Message,
-    state: FSMContext,
-    db: AsyncSession,
-    data: dict,
-    keywords: str | None,
-) -> None:
-    from sqlalchemy import update
-    from app.db.models import Subscription
-
-    user = await UserRepo.get_by_telegram_id(db, message.chat.id)
-    await db.execute(
-        update(Subscription)
-        .where(
-            Subscription.user_id == user.id,
-            Subscription.site_id == data["site_id"],
-        )
-        .values(keywords=keywords)
-    )
-    await state.clear()
-    kw_text = f"<code>{keywords}</code>" if keywords else "removed"
-    await message.answer(f"Keywords {kw_text} saved.")

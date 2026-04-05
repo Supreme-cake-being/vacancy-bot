@@ -4,6 +4,7 @@ from aiogram import Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
+from aiogram.fsm.context import FSMContext
 
 from app.bot.keyboards import main_menu_kb
 from app.db.repositories import UserRepo
@@ -33,7 +34,6 @@ async def cmd_start(message: Message, db: AsyncSession) -> None:
 
     await message.answer(text, reply_markup=main_menu_kb())
 
-
 @router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
     text = (
@@ -49,7 +49,6 @@ async def cmd_help(message: Message) -> None:
     )
     await message.answer(text)
 
-
 @router.callback_query(lambda c: c.data == "back_to_start")
 async def cb_back_to_start(cb: CallbackQuery) -> None:
     await cb.message.edit_text(
@@ -57,10 +56,34 @@ async def cb_back_to_start(cb: CallbackQuery) -> None:
     )
     await cb.answer()
 
-
 @router.callback_query(lambda c: c.data == "help")
 async def cb_help(cb: CallbackQuery) -> None:
     await cb.message.answer(
         "Use /add_site to add a site for monitoring."
+    )
+    await cb.answer()
+
+@router.callback_query(lambda c: c.data == "edit_keywords")
+async def cb_edit_keywords_global(
+    cb: CallbackQuery, state: FSMContext, db: AsyncSession
+) -> None:
+    from app.bot.handlers.keywords import KeywordsStates
+    from app.bot.keyboards import skip_kb
+
+    user = await UserRepo.get_by_telegram_id(db, cb.from_user.id)
+
+    current = (
+        f"Current keywords:\n<code>{user.keywords}</code>\n\n"
+        if user.keywords
+        else "No keywords set yet.\n\n"
+    )
+
+    await state.set_state(KeywordsStates.waiting_keywords)
+    await cb.message.edit_text(
+        f"{current}"
+        "Enter new keywords separated by comma:\n"
+        "<code>Python, Remote, Senior</code>\n\n"
+        "Or send <code>-</code> to remove the filter and receive all job postings.",
+        reply_markup=skip_kb(),
     )
     await cb.answer()
