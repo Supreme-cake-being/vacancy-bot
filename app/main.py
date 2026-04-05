@@ -7,9 +7,7 @@ from aiogram.client.default import DefaultBotProperties
 
 from app.config import settings
 
-
 logger = logging.getLogger(__name__)
-
 
 async def main() -> None:
     logging.basicConfig(
@@ -29,7 +27,6 @@ async def main() -> None:
         await dp.start_polling(bot)
     finally:
         await bot.session.close()
-
 
 if __name__ == "__main__":
     asyncio.run(main())

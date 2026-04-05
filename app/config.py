@@ -1,7 +1,6 @@
 from pydantic_settings import BaseSettings
 from pydantic import PostgresDsn
 
-
 class Settings(BaseSettings):
     # Telegram
     BOT_TOKEN: str
@@ -26,7 +25,6 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
-
 
 # Single global instance — import from here throughout the app
 settings = Settings()
